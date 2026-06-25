@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "npm --prefix server start",
-    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
+    "dev": "concurrently -n api,web \"npm run dev:backend\" \"node scripts/wait-for-port.mjs 3001 vite\"",
     "dev:frontend": "vite",
     "dev:backend": "npm --prefix server run dev",
     "build": "tsc -b && vite build",
