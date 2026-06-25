@@ -56,53 +56,61 @@ export async function runSync(): Promise<void> {
     console.log('[Sync] Already syncing, skipping.');
     return;
   }
+
+  const scriptPath = path.resolve(PROJECT_ROOT, 'scripts', 'import_gdrive.py');
+  if (!fs.existsSync(scriptPath)) {
+    console.log('[Sync] Import script not found, skipping sync.');
+    return;
+  }
+
   isSyncing = true;
   writeSyncStatus('syncing', null);
 
-  const scriptPath = path.resolve(PROJECT_ROOT, 'scripts', 'import_music.py');
   const venvPython = path.resolve(PROJECT_ROOT, 'venv', 'bin', 'python');
   const pythonCmd = fs.existsSync(venvPython) ? `"${venvPython}"` : 'python3';
 
   console.log(`[Sync] Starting sync: ${pythonCmd} ${scriptPath}`);
 
-  try {
-    const allTracks = await tracks().find().toArray();
-    const existingSongs = allTracks.map((t) => ({
-      id: t._id,
-      title: t.title,
-      artist: t.artist,
-      album: t.album,
-      genre: t.genre,
-      url: t.filePath,
-      cover: t.coverArt,
-      format: t.format,
-      details: t.details,
-      duration: t.duration,
-    }));
+  const allTracks = await tracks().find().toArray();
+  const existingSongs = allTracks.map((t) => ({
+    id: t._id,
+    title: t.title,
+    artist: t.artist,
+    album: t.album,
+    genre: t.genre,
+    url: t.filePath,
+    cover: t.coverArt,
+    format: t.format,
+    details: t.details,
+    duration: t.duration,
+  }));
 
+  await new Promise<void>((resolve, reject) => {
     const child = exec(
       `${pythonCmd} "${scriptPath}"`,
-      { cwd: PROJECT_ROOT, maxBuffer: 25 * 1024 * 1024 }, // 25MB max buffer
+      { cwd: PROJECT_ROOT, maxBuffer: 25 * 1024 * 1024 },
       async (error, stdout, stderr) => {
         isSyncing = false;
+
         if (error) {
           console.error(`[Sync] Error: ${error.message}`);
           if (stderr) console.error(`[Sync] stderr: ${stderr}`);
           writeSyncStatus('error', error.message, (stderr || '') + '\n' + (stdout || ''));
+          reject(error);
           return;
         }
 
-        const startIdx = stdout.indexOf('===JSON_START===');
-        const endIdx = stdout.indexOf('===JSON_END===');
+        try {
+          const startIdx = stdout.indexOf('===JSON_START===');
+          const endIdx = stdout.indexOf('===JSON_END===');
 
-        const cleanLogs = (
-          (startIdx !== -1 ? stdout.substring(0, startIdx) : '') +
-          (endIdx !== -1 ? stdout.substring(endIdx + '===JSON_END==='.length) : (startIdx === -1 ? stdout : ''))
-        ).trim();
+          const cleanLogs = (
+            (startIdx !== -1 ? stdout.substring(0, startIdx) : '') +
+            (endIdx !== -1 ? stdout.substring(endIdx + '===JSON_END==='.length) : (startIdx === -1 ? stdout : ''))
+          ).trim();
 
-        if (startIdx !== -1 && endIdx !== -1) {
-          const jsonStr = stdout.substring(startIdx + '===JSON_START==='.length, endIdx).trim();
-          try {
+          if (startIdx !== -1 && endIdx !== -1) {
+            const jsonStr = stdout.substring(startIdx + '===JSON_START==='.length, endIdx).trim();
             const parsedTracks = JSON.parse(jsonStr);
             console.log(`[Sync] Successfully parsed ${parsedTracks.length} tracks from stdout stream.`);
 
@@ -113,25 +121,23 @@ export async function runSync(): Promise<void> {
             console.log('[Sync] Triggering MongoDB database synchronization...');
             await migrateTracksToMongo(parsedTracks, false);
             writeSyncStatus('success', null, cleanLogs);
-          } catch (err: any) {
-            console.error('[Sync] Failed to parse JSON from stdout:', err.message);
-            writeSyncStatus('error', `Failed to parse JSON: ${err.message}`, cleanLogs || stdout);
+            resolve();
+          } else {
+            console.error('[Sync] JSON stream markers not found in output.');
+            writeSyncStatus('error', 'JSON stream markers not found in output.', cleanLogs || stdout);
+            reject(new Error('JSON stream markers not found'));
           }
-        } else {
-          console.error('[Sync] JSON stream markers not found in output.');
-          console.log(`[Sync] Raw output was:\n${stdout.trim()}`);
-          writeSyncStatus('error', 'JSON stream markers not found in output.', cleanLogs || stdout);
+        } catch (err: any) {
+          console.error('[Sync] Failed to process output:', err.message);
+          writeSyncStatus('error', `Failed to process output: ${err.message}`, stdout);
+          reject(err);
         }
       }
     );
 
     child.stdin?.write(JSON.stringify(existingSongs));
     child.stdin?.end();
-  } catch (err: any) {
-    isSyncing = false;
-    console.error('[Sync] Failed sync initialization:', err.message);
-    writeSyncStatus('error', `Initialization failed: ${err.message}`);
-  }
+  });
 }
 
 export function startSyncWorker(intervalMs: number = 5 * 60 * 1000): NodeJS.Timeout {

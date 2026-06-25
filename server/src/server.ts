@@ -108,13 +108,18 @@ async function bootstrap() {
     // 2. Setup indexes
     await createIndexes();
 
-    // 3. Start background sync worker (defaults to checking every 5 mins)
-    const syncInterval = process.env.SYNC_INTERVAL_MS 
-      ? parseInt(process.env.SYNC_INTERVAL_MS, 10) 
-      : 5 * 60 * 1000;
-    startSyncWorker(syncInterval);
+    // 3. Start background sync worker (only if Python script exists)
+    const syncScriptPath = path.resolve(PROJECT_ROOT, 'scripts', 'import_gdrive.py');
+    if (fs.existsSync(syncScriptPath)) {
+      const syncInterval = process.env.SYNC_INTERVAL_MS 
+        ? parseInt(process.env.SYNC_INTERVAL_MS, 10) 
+        : 5 * 60 * 1000;
+      startSyncWorker(syncInterval);
+    } else {
+      console.log('[Server] No import script found, sync worker disabled.');
+    }
 
-    // 4. Listen
+    // 5. Listen
     app.listen(PORT, () => {
       console.log(`[Server] CloudTunes backend running on http://localhost:${PORT}`);
     });
