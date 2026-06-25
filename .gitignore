@@ -34,4 +34,5 @@ __pycache__/
 # Generated data
 data/cache/
 data/covers/
+songs_to_download.txt
 
