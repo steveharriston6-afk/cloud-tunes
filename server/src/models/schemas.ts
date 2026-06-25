@@ -119,19 +119,7 @@ export interface TrackAPIResponse {
 
 /** Convert TrackDocument to API response */
 export function toTrackAPI(doc: TrackDocument): TrackAPIResponse {
-  let url: string;
-  if (doc.source === 'gdrive' && doc.filePath) {
-    if (doc.filePath.startsWith('http://') || doc.filePath.startsWith('https://')) {
-      url = doc.filePath;
-    } else if (doc.filePath.startsWith('/gdrive-proxy/')) {
-      const id = doc.filePath.split('/')[2];
-      url = `https://drive.usercontent.google.com/download?id=${id}&export=download`;
-    } else {
-      url = `/api/stream/${doc.publicId || doc._id}`;
-    }
-  } else {
-    url = `/api/stream/${doc.publicId || doc._id}`;
-  }
+  const url = `/api/stream/${doc.publicId || doc._id}`;
 
   return {
     id: doc.publicId || doc._id,

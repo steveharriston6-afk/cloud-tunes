@@ -25,9 +25,9 @@ async function runNodeImport(): Promise<void> {
   const apiKey = process.env.GOOGLE_DRIVE_API_KEY || '';
   const folderId = extractFolderId(folderUrl);
   if (!folderId || !apiKey) throw new Error('GOOGLE_DRIVE_FOLDER_URL or API key missing');
-  const fileMap = await listAudioFiles(folderId, apiKey);
-  if (fileMap.size === 0) throw new Error('No audio files found');
-  const trackInputs = [...fileMap.entries()].map(([name, id]) => parseTrackFromFile(name, id));
+  const entries = await listAudioFiles(folderId, apiKey);
+  if (entries.length === 0) throw new Error('No audio files found');
+  const trackInputs = entries.map((e) => parseTrackFromFile(e.name, e.id, e.album));
   await migrateTracksToMongo(trackInputs, false);
 }
 

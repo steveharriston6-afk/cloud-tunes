@@ -12,6 +12,8 @@ import { startSyncWorker, runSync } from './sync/syncWorker.js';
 import { tracks } from './db.js';
 import { extractFolderId, listAudioFiles, parseTrackFromFile } from './sync/gdriveImporter.js';
 import { migrateTracksToMongo } from './migration/migrate.js';
+import { downloadPlaceholderCovers } from './utils/downloadCovers.js';
+import { invalidateSongsCache } from './routes/tracks.js';
 
 // Load environment variables
 dotenv.config({ path: path.resolve(import.meta.dirname, '..', '..', '.env') });
@@ -103,6 +105,24 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   res.status(500).json({ error: err.message || 'Internal Server Error' });
 });
 
+async function migrateExistingCovers() {
+  try {
+    const oldTracks = await tracks().find({ coverArt: { $regex: /^https?:\/\// } }).toArray();
+    if (oldTracks.length === 0) return;
+    let updated = 0;
+    for (const doc of oldTracks) {
+      const groupKey = `${doc.artist || ''}::${doc.album || ''}`;
+      const hash = [...groupKey].reduce((s, c) => s + c.charCodeAt(0), 0) % 8;
+      await tracks().updateOne({ _id: doc._id }, { $set: { coverArt: `/covers/fallback_${hash}.jpg` } });
+      updated++;
+    }
+    console.log(`[Server] Migrated ${updated} tracks to local cover paths.`);
+    invalidateSongsCache();
+  } catch (err: any) {
+    console.log(`[Server] Cover migration skipped: ${err.message}`);
+  }
+}
+
 async function seedIfEmpty() {
   try {
     const existingCount = await tracks().countDocuments({ isAvailable: true });
@@ -119,9 +139,9 @@ async function seedIfEmpty() {
       return;
     }
     try {
-      const fileMap = await listAudioFiles(folderId, apiKey);
-      if (fileMap.size === 0) { console.log('[Server] No audio files found in Drive.'); return; }
-      const trackInputs = [...fileMap.entries()].map(([name, id]) => parseTrackFromFile(name, id));
+      const entries = await listAudioFiles(folderId, apiKey);
+      if (entries.length === 0) { console.log('[Server] No audio files found in Drive.'); return; }
+      const trackInputs = entries.map((e) => parseTrackFromFile(e.name, e.id, e.album));
       console.log(`[Server] Imported ${trackInputs.length} tracks from Google Drive, inserting into DB...`);
       await migrateTracksToMongo(trackInputs, false);
       console.log(`[Server] Database seeded with ${trackInputs.length} tracks.`);
@@ -146,10 +166,16 @@ async function bootstrap() {
       console.log(`[Server] CloudTunes backend running on http://localhost:${PORT}`);
     });
 
-    // 4. Seed in background (tracks appear as they're inserted)
+    // 4. Pre-download placeholder covers to data/covers/
+    downloadPlaceholderCovers(PROJECT_ROOT);
+
+    // 5. Migrate existing HTTP cover URLs to local paths
+    migrateExistingCovers();
+
+    // 6. Seed in background (tracks appear as they're inserted)
     seedIfEmpty();
 
-    // 5. Start sync worker in background
+    // 7. Start sync worker in background
     startSyncWorker();
   } catch (err) {
     console.error('[Bootstrap Failed]', err);

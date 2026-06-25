@@ -7,6 +7,7 @@ import { tracks } from '../db.js';
 import { toTrackAPI } from '../models/schemas.js';
 import { cacheService } from '../utils/cacheService.js';
 import { apiCache } from '../utils/responseCache.js';
+import { DEFAULT_COVERS, coversDir } from '../utils/downloadCovers.js';
 
 const router = Router();
 const PROJECT_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
@@ -163,6 +164,33 @@ router.get('/cover/:trackId', async (req, res) => {
         res.end(buffer);
         return;
       }
+      // Fallback: download from Unsplash if local file missing
+      const fallbackIdx = parseInt(coverUrl.match(/fallback_(\d+)/)?.[1] || '0');
+      const unsplashUrl = DEFAULT_COVERS[fallbackIdx] || DEFAULT_COVERS[0];
+      const fetchFallback = (target: string) => {
+        https.get(target, (proxyRes) => {
+          if ((proxyRes.statusCode === 301 || proxyRes.statusCode === 302) && proxyRes.headers.location) {
+            fetchFallback(proxyRes.headers.location);
+            return;
+          }
+          if (proxyRes.statusCode !== 200) { res.status(404).end('Cover not found'); return; }
+          const contentType = proxyRes.headers['content-type'] || 'image/jpeg';
+          const chunks: Buffer[] = [];
+          proxyRes.on('data', (chunk) => chunks.push(chunk));
+          proxyRes.on('end', async () => {
+            const buffer = Buffer.concat(chunks);
+            try {
+              await fs.promises.writeFile(localCoverPath, buffer);
+            } catch {}
+            await cacheService.set(trackId, 'covers', buffer, contentType);
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+            res.end(buffer);
+          });
+        }).on('error', () => { res.status(404).end('Cover load error'); });
+      };
+      fetchFallback(unsplashUrl);
+      return;
     }
 
     // 2. Remote cover URL proxy (with L1/L2 caching)
