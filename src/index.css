@@ -1,0 +1,472 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
+
+@import "tailwindcss";
+
+html, body {
+  height: 100%;
+  overflow: auto;
+}
+
+#root {
+  height: 100vh;
+  overflow: auto;
+}
+
+@theme inline {
+  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Outfit', sans-serif;
+
+  --color-primary: #22C55E;
+  --color-primary-hover: #16a34a;
+  --color-primary-glow: rgba(34, 197, 94, 0.4);
+
+  --color-accent: #22C55E;
+  --color-accent-glow: rgba(34, 197, 94, 0.35);
+
+  --color-bg: #09090B;
+  --color-bg-darker: #09090B;
+  --color-bg-dark: #111827;
+  --color-bg-light: #18181B;
+
+  --color-panel-glass: rgba(24, 24, 27, 0.7);
+  --color-panel-glass-heavy: rgba(17, 24, 39, 0.95);
+  --color-panel-border: #27272A;
+  --color-panel-border-focus: #22C55E;
+
+  --color-text-main: #FAFAFA;
+  --color-text-muted: #A1A1AA;
+  --color-text-dim: #71717A;
+
+  --color-hover-bg: rgba(255, 255, 255, 0.04);
+  --color-active-bg: rgba(255, 255, 255, 0.08);
+  --color-bg-subtle: rgba(255, 255, 255, 0.02);
+}
+
+:root {
+  --glass-input-bg: rgba(255, 255, 255, 0.04);
+  --glass-input-border: rgba(255, 255, 255, 0.08);
+
+  /* Album artwork color overrides (modified dynamically) */
+  --album-color-start: rgba(255, 45, 85, 0.12);
+  --album-color-end: rgba(142, 45, 226, 0.12);
+  --album-color-solid: #ff2d55;
+  --album-color-solid-muted: rgba(255, 45, 85, 0.6);
+}
+
+/* Light mode overrides */
+html.light {
+  --color-bg: #f5f5f7;
+  --color-bg-darker: #f5f5f7;
+  --color-bg-dark: #ffffff;
+  --color-bg-light: #f0f0f3;
+  
+  --color-panel-glass: rgba(255, 255, 255, 0.7);
+  --color-panel-glass-heavy: rgba(245, 245, 247, 0.92);
+  --color-panel-border: rgba(0, 0, 0, 0.08);
+  --color-panel-border-focus: rgba(255, 45, 85, 0.4);
+
+  /* Solid and accessible high-contrast text colors */
+  --color-text-main: #111827;
+  --color-text-muted: #4b5563;
+  --color-text-dim: #6b7280;
+
+  --glass-input-bg: rgba(0, 0, 0, 0.03);
+  --glass-input-border: rgba(0, 0, 0, 0.08);
+
+  /* Light theme interactive states */
+  --color-hover-bg: rgba(0, 0, 0, 0.04);
+  --color-active-bg: rgba(0, 0, 0, 0.08);
+  --color-bg-subtle: rgba(0, 0, 0, 0.015);
+
+  --album-color-start: rgba(255, 45, 85, 0.08);
+  --album-color-end: rgba(142, 45, 226, 0.08);
+}
+
+/* Custom Base & Utilities */
+@layer base {
+  body {
+    background-color: var(--color-bg-darker);
+    color: var(--color-text-main);
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+}
+
+/* Custom classes for Glassmorphism */
+.glass-panel {
+  background: var(--color-panel-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--color-panel-border);
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+.glass-panel-heavy {
+  background: var(--color-panel-glass-heavy);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--color-panel-border);
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+.glass-input {
+  background: var(--glass-input-bg);
+  border: 1px solid var(--glass-input-border);
+  color: var(--color-text-main);
+  transition: all 0.2s ease-in-out;
+}
+
+.glass-input:focus {
+  outline: none !important;
+  background: var(--glass-input-bg);
+  border-color: var(--color-primary);
+  box-shadow: none !important;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+html.light ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* Range input customization (slider) */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  background: rgba(128, 128, 128, 0.15);
+  height: 4px;
+  border-radius: 2px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -4px; /* Center the thumb on the track */
+  background-color: var(--color-primary);
+  height: 12px;
+  width: 12px;
+  border-radius: 50%;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+  transition: transform 0.1s ease;
+}
+
+input[type="range"]:hover::-webkit-slider-thumb {
+  transform: scale(1.2);
+}
+
+input[type="range"]::-moz-range-track {
+  background: rgba(128, 128, 128, 0.15);
+  height: 4px;
+  border-radius: 2px;
+}
+
+input[type="range"]::-moz-range-thumb {
+  background-color: var(--color-primary);
+  height: 12px;
+  width: 12px;
+  border: none;
+  border-radius: 50%;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+  transition: transform 0.1s ease;
+}
+
+input[type="range"]:hover::-moz-range-thumb {
+  transform: scale(1.2);
+}
+
+/* Music Player Seekbar Active Fill Simulation */
+.progress-fill {
+  background: linear-gradient(90deg, var(--color-primary), var(--color-accent));
+}
+
+/* Animated Neon Borders */
+.neon-border {
+  position: relative;
+}
+
+.neon-border::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.5;
+  transition: opacity 0.3s ease;
+}
+
+.neon-border:hover::after {
+  opacity: 1;
+}
+
+/* Page transition animations */
+@keyframes fadeIn {
+  from { 
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes searchDropIn {
+  from { 
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Micro animations */
+.hover-scale {
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.hover-scale:hover {
+  transform: scale(1.03);
+}
+
+.hover-scale-heavy {
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.hover-scale-heavy:hover {
+  transform: scale(1.08);
+}
+
+/* Text clipping gradient */
+.text-gradient {
+  background: linear-gradient(135deg, var(--color-text-main) 30%, var(--color-text-muted) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-primary {
+  background: linear-gradient(135deg, #ff2d55 0%, #8e2de2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Apple Music Liquid Animated Background */
+@keyframes fluidGradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.fluid-bg {
+  background: linear-gradient(-45deg, var(--album-color-start), var(--album-color-end), var(--color-bg-darker), var(--color-bg-dark));
+  background-size: 300% 300%;
+  animation: fluidGradient 20s ease infinite;
+}
+
+/* Custom Page & Panel Animations */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-down {
+  animation: slideDown 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Swipe handle utility */
+.swipe-handle {
+  width: 40px;
+  height: 5px;
+  background: rgba(128, 128, 128, 0.3);
+  border-radius: 999px;
+  margin: 12px auto;
+}
+
+/* Safe area support for iOS/Android notches & navigation bars */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+.mb-safe {
+  margin-bottom: env(safe-area-inset-bottom);
+}
+.mt-safe {
+  margin-top: env(safe-area-inset-top);
+}
+
+/* Enable momentum scrolling on overflow elements for iOS/Android */
+.overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Sidebar scrollbar customization for TV browsers */
+aside::-webkit-scrollbar {
+  width: 10px !important;
+  height: 10px !important;
+  display: block !important;
+}
+
+aside::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03) !important;
+}
+
+aside::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25) !important;
+  border-radius: 5px !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+aside::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* Enable smooth scrolling across the page */
+html, body {
+  scroll-behavior: smooth;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Ensure focus is highly visible for keyboard/remote navigation but clean and hidden for mouse clicks */
+*, button, a, input, select, textarea, [role="button"], [tabindex] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+*:focus, button:focus, a:focus, input:focus, select:focus, textarea:focus, [role="button"]:focus, [tabindex]:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+*:focus-visible, button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [role="button"]:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--color-primary) !important;
+  outline-offset: 2px !important;
+}
+
+/* FIX: Explicitly grant native scrolling capabilities */
+body {
+  overflow-y: scroll !important;
+  height: auto;
+}
+
+/* Ensure touch scrolling works reliably on scroll containers */
+aside, main, .overflow-y-auto {
+  touch-action: pan-y !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+/* Premium Styling declarations */
+.premium-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 16px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+  transition: transform 300ms cubic-bezier(0.25, 0.8, 0.25, 1),
+              box-shadow 300ms cubic-bezier(0.25, 0.8, 0.25, 1),
+              background-color 300ms cubic-bezier(0.25, 0.8, 0.25, 1),
+              border-color 300ms cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.premium-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.premium-card-artwork {
+  transition: transform 300ms cubic-bezier(0.25, 0.8, 0.25, 1),
+              filter 300ms cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.premium-card:hover .premium-card-artwork {
+  transform: scale(1.04);
+  filter: brightness(1.1);
+}
+
+.premium-carousel {
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  padding-bottom: 20px;
+  scrollbar-width: none; /* Firefox */
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.premium-carousel::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
