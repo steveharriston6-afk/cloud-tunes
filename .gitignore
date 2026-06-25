@@ -35,4 +35,4 @@ __pycache__/
 data/cache/
 data/covers/
 songs_to_download.txt
-
+data/
