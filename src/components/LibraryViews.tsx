@@ -64,7 +64,10 @@ export const LibraryViews = ({
     playNext,
     addToQueue,
     isSyncing,
-    syncLibrary
+    syncLibrary,
+    hasMoreSongs,
+    isLoadingSongs,
+    loadMoreSongs,
   } = useMusicPlayer();
 
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
@@ -124,12 +127,15 @@ export const LibraryViews = ({
 
   const artistsLoaderRef = useRef<HTMLDivElement>(null);
   const albumsLoaderRef = useRef<HTMLDivElement>(null);
+  const songsLoaderRef = useRef<HTMLDivElement>(null);
 
   // Refs for infinite scroll — IntersectionObserver callback always reads these
   const loadMoreArtistsRef = useRef<() => void>(() => {});
   const loadMoreAlbumsRef = useRef<() => void>(() => {});
+  const loadMoreSongsRef = useRef<() => void>(() => {});
   const hasMoreArtistsRef = useRef(true);
   const hasMoreAlbumsRef = useRef(true);
+  const hasMoreSongsRef = useRef(true);
   const artistsCursorRef = useRef<string | null>(null);
   const albumsCursorRef = useRef<string | null>(null);
   const isLoadingArtistsRef = useRef(false);
@@ -198,6 +204,8 @@ export const LibraryViews = ({
   useEffect(() => { albumsCursorRef.current = albumsCursor; }, [albumsCursor]);
   useEffect(() => { isLoadingArtistsRef.current = isLoadingArtists; }, [isLoadingArtists]);
   useEffect(() => { isLoadingAlbumsRef.current = isLoadingAlbums; }, [isLoadingAlbums]);
+  useEffect(() => { loadMoreSongsRef.current = loadMoreSongs; }, [loadMoreSongs]);
+  useEffect(() => { hasMoreSongsRef.current = hasMoreSongs; }, [hasMoreSongs]);
 
   // Fetch initial artists
   useEffect(() => {
@@ -353,6 +361,32 @@ export const LibraryViews = ({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentView, albumsLoaderRef.current]);
+
+  // Songs infinite scroll observer (always active when on home view)
+  const songsObserverRef = useRef<IntersectionObserver | null>(null);
+  useEffect(() => {
+    songsObserverRef.current?.disconnect();
+    songsObserverRef.current = null;
+
+    if (currentView !== 'home') return;
+
+    const loaderEl = songsLoaderRef.current;
+    if (!loaderEl) return;
+
+    const obs = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && hasMoreSongsRef.current) {
+        loadMoreSongsRef.current();
+      }
+    }, { threshold: 0.1 });
+    obs.observe(loaderEl);
+    songsObserverRef.current = obs;
+
+    return () => {
+      obs.disconnect();
+      if (songsObserverRef.current === obs) songsObserverRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentView, songsLoaderRef.current]);
 
 
   // Unified library filtering and sorting logic
@@ -719,6 +753,13 @@ export const LibraryViews = ({
                 />
               )}
             />
+          )}
+          {hasMoreSongs && (
+            <div ref={songsLoaderRef} className="h-10 flex items-center justify-center">
+              {isLoadingSongs && (
+                <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              )}
+            </div>
           )}
         </div>
       </div>

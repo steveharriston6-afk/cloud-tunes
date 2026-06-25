@@ -56,35 +56,30 @@ async function returnRangeResponse(cachedResponse, rangeHeader) {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // 1. Audio stream caching and serving
-  if (url.pathname.includes('/api/stream/')) {
+  // 1. Audio stream caching and serving (proxy & direct GDrive CDN)
+  const isAudio = url.pathname.includes('/api/stream/') || url.hostname.includes('drive.usercontent.google.com');
+  if (isAudio) {
     const rangeHeader = event.request.headers.get('range');
     
     event.respondWith(
       (async () => {
         const cache = await caches.open(AUDIO_CACHE);
-        // We match by URL, ignoring headers like Range
         const cachedResponse = await cache.match(event.request.url);
 
         if (cachedResponse) {
-          // If we have the full file cached, handle Range request or serve full file
           if (rangeHeader) {
             return returnRangeResponse(cachedResponse, rangeHeader);
           }
           return cachedResponse.clone();
         }
 
-        // Cache miss:
-        // If it's a range request, pass it through directly to the network without caching (fast start)
         if (rangeHeader) {
           return fetch(event.request);
         }
 
-        // If it's a full request (preloader fetching without range header), download and cache it!
         try {
           const response = await fetch(event.request);
           if (response.status === 200 || response.status === 206) {
-            // Put a copy in the cache
             await cache.put(event.request.url, response.clone());
           }
           return response;

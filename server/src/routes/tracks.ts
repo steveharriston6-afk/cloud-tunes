@@ -6,23 +6,32 @@ import { URL } from 'url';
 import { tracks } from '../db.js';
 import { toTrackAPI } from '../models/schemas.js';
 import { cacheService } from '../utils/cacheService.js';
+import { apiCache } from '../utils/responseCache.js';
 
 const router = Router();
 const PROJECT_ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 
-let cachedSongs: any = null;
-
 export function invalidateSongsCache() {
-  cachedSongs = null;
+  apiCache.invalidate('/api/songs');
+  apiCache.invalidate('/api/artists');
+  apiCache.invalidate('/api/albums');
+  apiCache.invalidate('/api/stats');
 }
 
 // ─── GET /api/songs — All available tracks ───────────────────────
 
 router.get('/songs', async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit as string) || 20;
     const cursorStr = req.query.cursor as string;
     const search = req.query.search as string;
+
+    // Cache only for initial page load (no cursor, no search)
+    if (!cursorStr && !search) {
+      const cacheKey = req.originalUrl;
+      if (apiCache.respond(cacheKey, req, res)) return;
+    }
+
+    const limit = parseInt(req.query.limit as string) || 50;
     const artist = req.query.artist as string;
     const album = req.query.album as string;
     const ids = req.query.ids as string;
@@ -30,22 +39,14 @@ router.get('/songs', async (req, res) => {
 
     const query: any = { isAvailable: true };
 
-    if (artist) {
-      query.artist = artist;
-    }
-    if (album) {
-      query.album = album;
-    }
+    if (artist) query.artist = artist;
+    if (album) query.album = album;
     if (ids) {
       const idArray = ids.split(',').filter(Boolean);
       query.publicId = { $in: idArray };
     }
+    if (search) query.$text = { $search: search };
 
-    if (search) {
-      query.$text = { $search: search };
-    }
-
-    // Cursor pagination parsing
     if (cursorStr) {
       try {
         const cursorData = JSON.parse(Buffer.from(cursorStr, 'base64').toString('utf-8'));
@@ -90,10 +91,14 @@ router.get('/songs', async (req, res) => {
       nextCursor = Buffer.from(JSON.stringify(cursorObj)).toString('base64');
     }
 
-    res.json({
-      tracks: docs.map(toTrackAPI),
-      nextCursor
-    });
+    const body = { tracks: docs.map(toTrackAPI), nextCursor };
+    if (!cursorStr && !search) {
+      const etag = apiCache.set(req.originalUrl, JSON.stringify(body));
+      res.setHeader('ETag', etag);
+      res.setHeader('Cache-Control', 'public, max-age=5');
+      res.setHeader('X-Cache', 'MISS');
+    }
+    res.json(body);
   } catch (err: any) {
     console.error('[API] Error fetching songs:', err.message);
     res.status(500).json({ error: err.message });
@@ -104,12 +109,20 @@ router.get('/songs', async (req, res) => {
 
 router.get('/tracks/:id', async (req, res) => {
   try {
+    const cacheKey = req.originalUrl;
+    if (apiCache.respond(cacheKey, req, res)) return;
+
     const doc = await tracks().findOne({ publicId: req.params.id });
     if (!doc) {
       res.status(404).json({ error: 'Track not found' });
       return;
     }
-    res.json(toTrackAPI(doc));
+    const body = toTrackAPI(doc);
+    const etag = apiCache.set(cacheKey, JSON.stringify(body), 30000);
+    res.setHeader('ETag', etag);
+    res.setHeader('Cache-Control', 'public, max-age=30');
+    res.setHeader('X-Cache', 'MISS');
+    res.json(body);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -221,26 +234,16 @@ router.get('/stream/:trackId', async (req, res) => {
       else if (ext === '.m4a' || ext === '.mp4') contentType = 'audio/mp4';
       else if (ext === '.ogg') contentType = 'audio/ogg';
 
-      const MAX_CHUNK_SIZE = 1024 * 1024; // 1 MB chunk limit
-
       if (clientRange) {
         const parts = clientRange.replace(/bytes=/, '').split('-');
         const start = parseInt(parts[0], 10);
-        let end = parts[1] ? parseInt(parts[1], 10) : start + MAX_CHUNK_SIZE - 1;
+        const end = parts[1] ? Math.min(parseInt(parts[1], 10), totalSize - 1) : totalSize - 1;
 
         if (start >= totalSize) {
           res.status(416);
           res.setHeader('Content-Range', `bytes */${totalSize}`);
           res.end();
           return;
-        }
-
-        if (end >= totalSize) {
-          end = totalSize - 1;
-        }
-
-        if (end - start + 1 > MAX_CHUNK_SIZE) {
-          end = start + MAX_CHUNK_SIZE - 1;
         }
 
         const chunkSize = end - start + 1;
@@ -275,18 +278,9 @@ router.get('/stream/:trackId', async (req, res) => {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
       };
 
-      const MAX_CHUNK_SIZE = 1024 * 1024; // 1 MB chunk limit
-      let start = 0;
-      let end: number | null = null;
-
       if (clientRange) {
-        const parts = clientRange.replace(/bytes=/, '').split('-');
-        start = parseInt(parts[0], 10);
-        end = parts[1] ? parseInt(parts[1], 10) : null;
+        requestHeaders['Range'] = clientRange;
       }
-
-      const targetEnd = end !== null ? Math.min(end, start + MAX_CHUNK_SIZE - 1) : (start + MAX_CHUNK_SIZE - 1);
-      requestHeaders['Range'] = `bytes=${start}-${targetEnd}`;
 
       const options: https.RequestOptions = {
         method: 'GET',
@@ -327,27 +321,29 @@ router.get('/stream/:trackId', async (req, res) => {
 
 // ─── GET /api/sync/status — Get sync status and logs ──────────────
 
-router.get('/sync/status', async (_req, res) => {
+router.get('/sync/status', async (req, res) => {
+  const cacheKey = req.originalUrl;
+  if (apiCache.respond(cacheKey, req, res)) return;
   try {
     const statusFilePath = path.resolve(PROJECT_ROOT, 'data', 'sync_status.json');
+    let body: any;
     if (fs.existsSync(statusFilePath)) {
       const data = fs.readFileSync(statusFilePath, 'utf-8');
-      res.json(JSON.parse(data));
+      body = JSON.parse(data);
     } else {
-      res.json({
+      body = {
         status: 'idle',
         lastSyncTime: null,
         error: null,
-        stats: {
-          totalDiscovered: 0,
-          newAdded: 0,
-          updated: 0,
-          failed: 0,
-          covers: { embedded: 0, folder: 0, fallback: 0 }
-        },
+        stats: { totalDiscovered: 0, newAdded: 0, updated: 0, failed: 0, covers: { embedded: 0, folder: 0, fallback: 0 } },
         logs: []
-      });
+      };
     }
+    const etag = apiCache.set(cacheKey, JSON.stringify(body), 10000);
+    res.setHeader('ETag', etag);
+    res.setHeader('Cache-Control', 'public, max-age=10');
+    res.setHeader('X-Cache', 'MISS');
+    res.json(body);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

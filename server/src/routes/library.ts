@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { tracks, artists, albums, favorites, playbackHistory } from '../db.js';
+import { apiCache } from '../utils/responseCache.js';
 
 const router = Router();
 
@@ -7,14 +8,16 @@ const router = Router();
 
 router.get('/artists', async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit as string) || 20;
     const cursorStr = req.query.cursor as string;
     const search = req.query.search as string;
 
+    const cacheKey = req.originalUrl;
+    if (!cursorStr && !search && apiCache.respond(cacheKey, req, res)) return;
+
+    const limit = parseInt(req.query.limit as string) || 20;
+
     const query: any = {};
-    if (search) {
-      query.$text = { $search: search };
-    }
+    if (search) query.$text = { $search: search };
 
     if (cursorStr) {
       try {
@@ -40,10 +43,14 @@ router.get('/artists', async (req, res) => {
       nextCursor = Buffer.from(JSON.stringify({ name: last.name, id: last._id })).toString('base64');
     }
 
-    res.json({
-      artists: result,
-      nextCursor
-    });
+    const body = { artists: result, nextCursor };
+    if (!cursorStr && !search) {
+      const etag = apiCache.set(cacheKey, JSON.stringify(body), 10000);
+      res.setHeader('ETag', etag);
+      res.setHeader('Cache-Control', 'public, max-age=10');
+      res.setHeader('X-Cache', 'MISS');
+    }
+    res.json(body);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -53,14 +60,16 @@ router.get('/artists', async (req, res) => {
 
 router.get('/albums', async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit as string) || 20;
     const cursorStr = req.query.cursor as string;
     const search = req.query.search as string;
 
+    const cacheKey = req.originalUrl;
+    if (!cursorStr && !search && apiCache.respond(cacheKey, req, res)) return;
+
+    const limit = parseInt(req.query.limit as string) || 20;
+
     const query: any = {};
-    if (search) {
-      query.$text = { $search: search };
-    }
+    if (search) query.$text = { $search: search };
 
     if (cursorStr) {
       try {
@@ -86,10 +95,14 @@ router.get('/albums', async (req, res) => {
       nextCursor = Buffer.from(JSON.stringify({ name: last.name, id: last._id })).toString('base64');
     }
 
-    res.json({
-      albums: result,
-      nextCursor
-    });
+    const body = { albums: result, nextCursor };
+    if (!cursorStr && !search) {
+      const etag = apiCache.set(cacheKey, JSON.stringify(body), 10000);
+      res.setHeader('ETag', etag);
+      res.setHeader('Cache-Control', 'public, max-age=10');
+      res.setHeader('X-Cache', 'MISS');
+    }
+    res.json(body);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -98,6 +111,8 @@ router.get('/albums', async (req, res) => {
 // ─── GET /api/stats — Library statistics ─────────────────────────
 
 router.get('/stats', async (req, res) => {
+  const cacheKey = req.originalUrl;
+  if (apiCache.respond(cacheKey, req, res)) return;
   const userId = (req as any).userId;
   try {
     const trackCount = await tracks().countDocuments({ isAvailable: true });
@@ -132,7 +147,7 @@ router.get('/stats', async (req, res) => {
       ])
       .toArray();
 
-    res.json({
+    const body = {
       trackCount,
       artistCount,
       albumCount,
@@ -140,7 +155,12 @@ router.get('/stats', async (req, res) => {
       totalDuration,
       formats: formatAgg.map((f) => ({ format: f._id, count: f.count })),
       sources: sourceAgg.map((s) => ({ source: s._id, count: s.count })),
-    });
+    };
+    const etag = apiCache.set(cacheKey, JSON.stringify(body), 30000);
+    res.setHeader('ETag', etag);
+    res.setHeader('Cache-Control', 'public, max-age=30');
+    res.setHeader('X-Cache', 'MISS');
+    res.json(body);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

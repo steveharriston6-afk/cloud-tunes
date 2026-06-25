@@ -1,17 +1,5 @@
 {
-  "status": "error",
-  "lastSyncTime": "2026-06-25T09:17:38.125Z",
-  "error": "JSON stream markers not found in output.",
-  "stats": {
-    "totalDiscovered": 0,
-    "newAdded": 0,
-    "updated": 0,
-    "failed": 0,
-    "covers": {
-      "embedded": 0,
-      "folder": 0,
-      "fallback": 0
-    }
-  },
-  "logs": []
+  "status": "success",
+  "lastSyncTime": "2026-06-25T10:37:50.422Z",
+  "error": null
 }

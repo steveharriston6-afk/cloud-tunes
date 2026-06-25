@@ -8,7 +8,10 @@ import { createIndexes } from './indexes.js';
 import tracksRouter from './routes/tracks.js';
 import searchRouter from './routes/search.js';
 import libraryRouter from './routes/library.js';
-import { startSyncWorker } from './sync/syncWorker.js';
+import { startSyncWorker, runSync } from './sync/syncWorker.js';
+import { tracks } from './db.js';
+import { extractFolderId, listAudioFiles, parseTrackFromFile } from './sync/gdriveImporter.js';
+import { migrateTracksToMongo } from './migration/migrate.js';
 
 // Load environment variables
 dotenv.config({ path: path.resolve(import.meta.dirname, '..', '..', '.env') });
@@ -100,6 +103,36 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   res.status(500).json({ error: err.message || 'Internal Server Error' });
 });
 
+async function seedIfEmpty() {
+  try {
+    const existingCount = await tracks().countDocuments({ isAvailable: true });
+    if (existingCount > 0) {
+      console.log(`[Server] Database has ${existingCount} tracks, skipping seed.`);
+      return;
+    }
+    console.log('[Server] Database empty, importing from Google Drive...');
+    const folderUrl = process.env.GOOGLE_DRIVE_FOLDER_URL || '';
+    const apiKey = process.env.GOOGLE_DRIVE_API_KEY || '';
+    const folderId = extractFolderId(folderUrl);
+    if (!folderId || !apiKey) {
+      console.log('[Server] GOOGLE_DRIVE_FOLDER_URL or API key missing.');
+      return;
+    }
+    try {
+      const fileMap = await listAudioFiles(folderId, apiKey);
+      if (fileMap.size === 0) { console.log('[Server] No audio files found in Drive.'); return; }
+      const trackInputs = [...fileMap.entries()].map(([name, id]) => parseTrackFromFile(name, id));
+      console.log(`[Server] Imported ${trackInputs.length} tracks from Google Drive, inserting into DB...`);
+      await migrateTracksToMongo(trackInputs, false);
+      console.log(`[Server] Database seeded with ${trackInputs.length} tracks.`);
+    } catch (err: any) {
+      console.log(`[Server] GDrive import failed: ${err.message}`);
+    }
+  } catch (err: any) {
+    console.log(`[Server] Seed check failed: ${err.message}`);
+  }
+}
+
 async function bootstrap() {
   try {
     // 1. Connect to MongoDB
@@ -108,21 +141,16 @@ async function bootstrap() {
     // 2. Setup indexes
     await createIndexes();
 
-    // 3. Start background sync worker (only if Python script exists)
-    const syncScriptPath = path.resolve(PROJECT_ROOT, 'scripts', 'import_gdrive.py');
-    if (fs.existsSync(syncScriptPath)) {
-      const syncInterval = process.env.SYNC_INTERVAL_MS 
-        ? parseInt(process.env.SYNC_INTERVAL_MS, 10) 
-        : 5 * 60 * 1000;
-      startSyncWorker(syncInterval);
-    } else {
-      console.log('[Server] No import script found, sync worker disabled.');
-    }
-
-    // 5. Listen
+    // 3. Listen immediately (non-blocking, API available right away)
     app.listen(PORT, () => {
       console.log(`[Server] CloudTunes backend running on http://localhost:${PORT}`);
     });
+
+    // 4. Seed in background (tracks appear as they're inserted)
+    seedIfEmpty();
+
+    // 5. Start sync worker in background
+    startSyncWorker();
   } catch (err) {
     console.error('[Bootstrap Failed]', err);
     process.exit(1);

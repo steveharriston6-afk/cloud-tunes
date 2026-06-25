@@ -75,6 +75,11 @@ interface MusicPlayerContextType {
 
   isSyncing: boolean;
   syncLibrary: () => Promise<void>;
+
+  // Cursor-based song pagination
+  hasMoreSongs: boolean;
+  isLoadingSongs: boolean;
+  loadMoreSongs: () => void;
 }
 
 const MusicPlayerContext = createContext<MusicPlayerContextType | undefined>(undefined);
@@ -303,28 +308,37 @@ export const MusicPlayerProvider = ({ children }: { children: React.ReactNode })
   }, [currentTrack, queue, queueIndex, repeatMode]);
 
   const [isSyncing, setIsSyncing] = useState(false);
+  const [songsCursor, setSongsCursor] = useState<string | null>(null);
+  const [hasMoreSongs, setHasMoreSongs] = useState(true);
+  const [isLoadingSongs, setIsLoadingSongs] = useState(false);
 
   const fetchSongs = () => {
-    const tracksEqual = (a: Track[], b: Track[]) => {
-      if (a.length !== b.length) return false;
-      return a.every((track, i) => track.id === b[i].id && track.url === b[i].url && track.details === b[i].details && track.isCloud === b[i].isCloud);
-    };
-
+    setIsLoadingSongs(true);
     fetch('/api/songs?limit=20')
       .then((res) => res.json())
       .then((data: { tracks: Track[]; nextCursor: string | null }) => {
+        setSongsCursor(data.nextCursor);
+        setHasMoreSongs(!!data.nextCursor);
         const songsList = data.tracks;
-        // Cache in IndexedDB for subsequent rapid startups
         dbCache.setMetadata('songs_list', songsList);
-
-        setTracks((prevTracks) => {
-          if (tracksEqual(prevTracks, songsList)) {
-            return prevTracks;
-          }
-          return songsList;
-        });
+        setTracks(songsList);
       })
-      .catch((err) => console.error('Failed to load track metadata:', err));
+      .catch((err) => console.error('Failed to load track metadata:', err))
+      .finally(() => setIsLoadingSongs(false));
+  };
+
+  const loadMoreSongs = () => {
+    if (!songsCursor || isLoadingSongs || !hasMoreSongs) return;
+    setIsLoadingSongs(true);
+    fetch(`/api/songs?limit=20&cursor=${encodeURIComponent(songsCursor)}`)
+      .then((res) => res.json())
+      .then((data: { tracks: Track[]; nextCursor: string | null }) => {
+        setSongsCursor(data.nextCursor);
+        setHasMoreSongs(!!data.nextCursor);
+        setTracks((prev) => [...prev, ...data.tracks]);
+      })
+      .catch((err) => console.error('Failed to load more tracks:', err))
+      .finally(() => setIsLoadingSongs(false));
   };
 
   // Restores local cached tracks list instantly on startup, then polls
@@ -340,9 +354,8 @@ export const MusicPlayerProvider = ({ children }: { children: React.ReactNode })
       }
       fetchSongs();
     };
-
     initTracks();
-    const interval = setInterval(fetchSongs, 10000);
+    const interval = setInterval(fetchSongs, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -1021,6 +1034,9 @@ export const MusicPlayerProvider = ({ children }: { children: React.ReactNode })
         removeTrackFromPlaylist,
         isSyncing,
         syncLibrary,
+        hasMoreSongs,
+        isLoadingSongs,
+        loadMoreSongs,
       }}
     >
       {children}
