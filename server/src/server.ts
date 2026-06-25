@@ -20,10 +20,7 @@ dotenv.config({ path: path.resolve(import.meta.dirname, '..', '..', '.env') });
 
 import fs from 'fs';
 
-if (!process.env.PORT) {
-  throw new Error('PORT is not defined in the environment variables (.env)');
-}
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || '3001';
 const app = express();
 const PROJECT_ROOT = path.resolve(import.meta.dirname, '..', '..');
 const DIST_PATH = path.resolve(PROJECT_ROOT, 'dist');

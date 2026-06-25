@@ -24,7 +24,6 @@ router.get('/search', async (req, res) => {
     // ── Track search: text index + regex fallback ─────────────
     let trackResults = await tracks()
       .find({
-        isAvailable: true,
         $text: { $search: query },
       })
       .project({ score: { $meta: 'textScore' } })
@@ -37,7 +36,6 @@ router.get('/search', async (req, res) => {
       const existingIds = new Set(trackResults.map((t) => t._id));
       const regexResults = await tracks()
         .find({
-          isAvailable: true,
           _id: { $nin: Array.from(existingIds) },
           $or: [
             { title: regexPattern },
@@ -129,7 +127,7 @@ router.get('/suggestions', async (req, res) => {
 
     // Priority 1: Title prefix matches
     const titlePrefix = await tracks()
-      .find({ isAvailable: true, title: prefixRegex })
+      .find({ title: prefixRegex })
       .limit(limit)
       .toArray();
 
@@ -190,7 +188,6 @@ router.get('/suggestions', async (req, res) => {
       const existingIds = new Set(suggestions.filter((s) => s.id).map((s) => s.id));
       const containsResults = await tracks()
         .find({
-          isAvailable: true,
           publicId: { $nin: Array.from(existingIds) },
           $or: [
             { title: containsRegex },
