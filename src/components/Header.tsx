@@ -15,7 +15,7 @@ interface HeaderProps {
 }
 
 export const Header = ({ searchQuery, setSearchQuery, setCurrentView, setSelectedAlbum, setSelectedArtist }: HeaderProps) => {
-  const { effectMode, theme, setTheme, tracks, playTrack } = useMusicPlayer();
+  const { effectMode, theme, setTheme, tracks, searchIndexTracks, playTrack } = useMusicPlayer();
 
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -33,12 +33,13 @@ export const Header = ({ searchQuery, setSearchQuery, setCurrentView, setSelecte
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // Build search index when tracks change
+  // Build search index from full song list (all tracks, no pagination)
   useEffect(() => {
-    if (tracks.length > 0) {
-      searchEngine.buildIndex(tracks);
+    const indexSource = searchIndexTracks.length > 0 ? searchIndexTracks : tracks;
+    if (indexSource.length > 0) {
+      searchEngine.buildIndex(indexSource);
     }
-  }, [tracks]);
+  }, [searchIndexTracks, tracks]);
 
   const maxSuggestions = isMobile ? 3 : 5;
 

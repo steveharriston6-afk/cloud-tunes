@@ -80,6 +80,9 @@ interface MusicPlayerContextType {
   hasMoreSongs: boolean;
   isLoadingSongs: boolean;
   loadMoreSongs: () => void;
+
+  // Full song index for search (all tracks, no pagination)
+  searchIndexTracks: Track[];
 }
 
 const MusicPlayerContext = createContext<MusicPlayerContextType | undefined>(undefined);
@@ -311,6 +314,7 @@ export const MusicPlayerProvider = ({ children }: { children: React.ReactNode })
   const [songsCursor, setSongsCursor] = useState<string | null>(null);
   const [hasMoreSongs, setHasMoreSongs] = useState(true);
   const [isLoadingSongs, setIsLoadingSongs] = useState(false);
+  const [searchIndexTracks, setSearchIndexTracks] = useState<Track[]>([]);
 
   const fetchSongs = () => {
     setIsLoadingSongs(true);
@@ -341,7 +345,7 @@ export const MusicPlayerProvider = ({ children }: { children: React.ReactNode })
       .finally(() => setIsLoadingSongs(false));
   };
 
-  // Restores local cached tracks list instantly on startup, then polls
+  // Restores local cached tracks list instantly on startup, fetches fresh data once
   useEffect(() => {
     const initTracks = async () => {
       try {
@@ -353,10 +357,17 @@ export const MusicPlayerProvider = ({ children }: { children: React.ReactNode })
         console.error('Failed to load cached metadata from IndexedDB:', err);
       }
       fetchSongs();
+      // Fetch all songs for the search engine (no cursor, large limit)
+      fetch('/api/songs?limit=10000')
+        .then((res) => res.json())
+        .then((data: { tracks: Track[] }) => {
+          if (data.tracks && data.tracks.length > 0) {
+            setSearchIndexTracks(data.tracks);
+          }
+        })
+        .catch((err) => console.error('Failed to load search index tracks:', err));
     };
     initTracks();
-    const interval = setInterval(fetchSongs, 30000);
-    return () => clearInterval(interval);
   }, []);
 
   const syncLibrary = async () => {
@@ -1037,6 +1048,7 @@ export const MusicPlayerProvider = ({ children }: { children: React.ReactNode })
         hasMoreSongs,
         isLoadingSongs,
         loadMoreSongs,
+        searchIndexTracks,
       }}
     >
       {children}
